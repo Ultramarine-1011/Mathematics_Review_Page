@@ -1,52 +1,104 @@
-import { useCallback, useMemo, useState } from 'react'
-import { initialDailyStudy, initialTasks } from '../data/mockData'
-import type { DailyStudy, StudyStats, SubjectProgress, Task } from '../types'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { getInitialState } from '../data/mockData'
+import type {
+  NewStudySessionInput,
+  NewTaskInput,
+  StudySession,
+  Task,
+} from '../types'
 import {
+  aggregateDailyStudy,
   computeStats,
   computeSubjectProgress,
-  minutesForDifficulty,
 } from '../utils/stats'
+import { clearState, loadState, saveState } from '../utils/storage'
 
 export function useStudyProgress() {
-  const [tasks, setTasks] = useState<Task[]>(initialTasks)
-  const [dailyStudy, setDailyStudy] = useState<DailyStudy[]>(initialDailyStudy)
-
-  const stats: StudyStats = useMemo(
-    () => computeStats(tasks, dailyStudy),
-    [tasks, dailyStudy],
+  const [tasks, setTasks] = useState<Task[]>(() => loadState().tasks)
+  const [studySessions, setStudySessions] = useState<StudySession[]>(
+    () => loadState().studySessions,
   )
 
-  const subjectProgress: SubjectProgress[] = useMemo(
+  useEffect(() => {
+    saveState({ tasks, studySessions })
+  }, [tasks, studySessions])
+
+  const stats = useMemo(
+    () => computeStats(tasks, studySessions),
+    [tasks, studySessions],
+  )
+
+  const subjectProgress = useMemo(
     () => computeSubjectProgress(tasks),
     [tasks],
   )
 
+  const dailyStudy = useMemo(
+    () => aggregateDailyStudy(studySessions),
+    [studySessions],
+  )
+
   const toggleTask = useCallback((id: string) => {
-    setTasks((prev) => {
-      const task = prev.find((t) => t.id === id)
-      if (!task) return prev
-
-      const willComplete = !task.completed
-      const delta = willComplete
-        ? minutesForDifficulty(task.difficulty)
-        : -minutesForDifficulty(task.difficulty)
-
-      setDailyStudy((daily) => {
-        if (daily.length === 0) return daily
-        const next = [...daily]
-        const last = next[next.length - 1]
-        next[next.length - 1] = {
-          ...last,
-          minutes: Math.max(0, last.minutes + delta),
+    setTasks((prev) =>
+      prev.map((task) => {
+        if (task.id !== id) return task
+        const willComplete = !task.completed
+        return {
+          ...task,
+          completed: willComplete,
+          completedAt: willComplete ? new Date().toISOString() : null,
         }
-        return next
-      })
-
-      return prev.map((t) =>
-        t.id === id ? { ...t, completed: willComplete } : t,
-      )
-    })
+      }),
+    )
   }, [])
 
-  return { tasks, dailyStudy, stats, subjectProgress, toggleTask }
+  const addStudySession = useCallback((input: NewStudySessionInput) => {
+    if (input.minutes <= 0) return
+
+    const session: StudySession = {
+      id: crypto.randomUUID(),
+      subject: input.subject,
+      minutes: input.minutes,
+      date: input.date,
+      note: input.note?.trim() || undefined,
+    }
+
+    setStudySessions((prev) => [...prev, session])
+  }, [])
+
+  const addTask = useCallback((input: NewTaskInput) => {
+    const task: Task = {
+      id: crypto.randomUUID(),
+      name: input.name.trim(),
+      subject: input.subject,
+      difficulty: input.difficulty,
+      estimatedMinutes: input.estimatedMinutes,
+      priority: input.priority,
+      dueDate: input.dueDate || undefined,
+      completed: false,
+      createdAt: new Date().toISOString(),
+      completedAt: null,
+    }
+
+    setTasks((prev) => [...prev, task])
+  }, [])
+
+  const resetToInitial = useCallback(() => {
+    clearState()
+    const initial = getInitialState()
+    setTasks(initial.tasks)
+    setStudySessions(initial.studySessions)
+  }, [])
+
+  return {
+    tasks,
+    studySessions,
+    stats,
+    subjectProgress,
+    dailyStudy,
+    toggleTask,
+    addStudySession,
+    addTask,
+    resetToInitial,
+  }
 }

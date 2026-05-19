@@ -1,13 +1,44 @@
+import { useMemo, useState } from 'react'
+import { Filters } from './components/Filters'
 import { OverviewCards } from './components/OverviewCards'
+import { StudySessionForm } from './components/StudySessionForm'
 import { SubjectProgress } from './components/SubjectProgress'
+import { TaskForm } from './components/TaskForm'
 import { TaskList } from './components/TaskList'
 import { WeeklyChart } from './components/WeeklyChart'
+import { Button } from './components/ui/Button'
 import { useStudyProgress } from './hooks/useStudyProgress'
-import { getEncouragement } from './utils/stats'
+import type { Subject, TaskFilterStatus } from './types'
+import { filterTasks, getEncouragement } from './utils/stats'
 
 function App() {
-  const { tasks, dailyStudy, stats, subjectProgress, toggleTask } = useStudyProgress()
-  const encouragement = getEncouragement(stats.completedTasks, stats.totalTasks)
+  const {
+    tasks,
+    stats,
+    subjectProgress,
+    dailyStudy,
+    toggleTask,
+    addStudySession,
+    addTask,
+    resetToInitial,
+  } = useStudyProgress()
+
+  const [filterStatus, setFilterStatus] = useState<TaskFilterStatus>('all')
+  const [filterSubject, setFilterSubject] = useState<Subject | 'all'>('all')
+
+  const filteredTasks = useMemo(
+    () => filterTasks(tasks, filterStatus, filterSubject),
+    [tasks, filterStatus, filterSubject],
+  )
+
+  const encouragement = getEncouragement(stats, stats.todayMinutes)
+
+  const handleReset = () => {
+    const confirmed = window.confirm(
+      '确定要清空本地数据并恢复初始数据吗？此操作不可撤销。',
+    )
+    if (confirmed) resetToInitial()
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 px-4 py-8 sm:px-6 lg:px-8">
@@ -33,13 +64,29 @@ function App() {
           <SubjectProgress subjects={subjectProgress} />
         </section>
 
-        <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <WeeklyChart dailyStudy={dailyStudy} />
-          <TaskList tasks={tasks} onToggle={toggleTask} />
+        <section className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <StudySessionForm onSubmit={addStudySession} />
+          <TaskForm onSubmit={addTask} />
         </section>
 
-        <footer className="mt-10 text-center text-sm text-slate-500">
-          坚持每一天，离梦想更近一步 ✨
+        <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <WeeklyChart dailyStudy={dailyStudy} />
+          <div>
+            <Filters
+              status={filterStatus}
+              subject={filterSubject}
+              onStatusChange={setFilterStatus}
+              onSubjectChange={setFilterSubject}
+            />
+            <TaskList tasks={filteredTasks} onToggle={toggleTask} />
+          </div>
+        </section>
+
+        <footer className="mt-10 flex flex-col items-center gap-4 text-center">
+          <p className="text-sm text-slate-500">坚持每一天，离梦想更近一步</p>
+          <Button variant="danger" onClick={handleReset}>
+            清空本地数据并恢复初始数据
+          </Button>
         </footer>
       </div>
     </div>

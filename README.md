@@ -1,7 +1,7 @@
 # 考研数学复习进度看板
 
-一个面向考研生的**单页可视化网页**，用于查看复习进度、学习时长和每日任务完成情况。  
-本项目**没有后端**，所有数据保存在浏览器内存中，适合作为 React + TypeScript 入门练手项目。
+一个面向考研生的**单页学习记录工具**，用于管理复习任务、记录学习时长并可视化进度。  
+本项目**没有后端**，数据通过 `localStorage` 持久化在浏览器本地，刷新页面后仍可保留。
 
 ---
 
@@ -10,12 +10,82 @@
 | 模块 | 说明 |
 |------|------|
 | **顶部概览** | 今日学习时长、本周学习时长、已完成任务数、连续学习天数 |
-| **科目进度** | 数学分析、高等代数、英语 — 进度条、完成百分比、剩余任务数 |
-| **学习图表** | 最近 7 天学习时长柱状图（Recharts） |
-| **任务列表** | 至少 6 条任务，含名称、科目、难度、完成状态 |
-| **交互联动** | 点击任务左侧圆圈切换完成状态后，概览、各科进度、今日柱高**自动更新** |
+| **科目进度** | 数学分析、高等代数、英语 — 优先按预计耗时计算进度 |
+| **学习图表** | 最近 7 天学习时长柱状图（来自真实学习记录） |
+| **记录学习时长** | 选择科目、输入分钟数、可选备注，提交后更新统计与图表 |
+| **添加任务** | 创建带难度、预计耗时、优先级、截止日期的复习任务 |
+| **任务列表** | 点击切换完成状态；支持按状态/科目筛选 |
+| **本地持久化** | 任务与学习记录自动保存，支持一键重置为初始数据 |
 | **响应式布局** | 手机单列、桌面多列，适配不同屏幕 |
-| **体验细节** | 玻璃拟态卡片、hover 动效、根据完成率变化的鼓励文案 |
+
+---
+
+## v2 改进点
+
+- **任务完成与学习时长解耦**：勾选任务不再自动增加今日学习分钟数
+- **新增 `StudySession` 数据模型**：学习时长统计全部来自手动记录
+- **`localStorage` 持久化**（key: `mathematics-review-v2`），刷新不丢数据
+- **科目进度按 `estimatedMinutes` 加权**，更贴近真实复习量
+- **任务筛选、优先级标识、逾期提示、完成时间显示**
+- **鼓励文案**结合今日学习时长与任务完成情况动态变化
+
+---
+
+## 数据模型
+
+### Task（任务）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | string | 唯一标识 |
+| `name` | string | 任务名称 |
+| `subject` | Subject | 科目 |
+| `difficulty` | easy / medium / hard | 难度 |
+| `estimatedMinutes` | number | 预计耗时（分钟） |
+| `completed` | boolean | 是否完成 |
+| `priority` | low / medium / high | 优先级 |
+| `dueDate` | string? | 截止日期 YYYY-MM-DD |
+| `createdAt` | string | 创建时间 ISO |
+| `completedAt` | string \| null | 完成时间，未完成时为 null |
+
+### StudySession（学习记录）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | string | 唯一标识 |
+| `subject` | Subject | 科目 |
+| `minutes` | number | 学习时长（分钟） |
+| `date` | string | 日期 YYYY-MM-DD |
+| `note` | string? | 可选备注 |
+
+### Subject（科目）
+
+- `math-analysis` — 数学分析
+- `linear-algebra` — 高等代数
+- `english` — 英语
+
+---
+
+## 统计规则
+
+| 指标 | 计算方式 |
+|------|----------|
+| 今日学习 | 今天所有 `StudySession.minutes` 之和 |
+| 本周学习 | 最近 7 天 `StudySession.minutes` 之和 |
+| 连续学习天数 | 从今天（或昨天，若今天尚无记录）往前数连续有学习记录的天数 |
+| 已完成任务 | `Task.completed === true` 的数量 |
+| 科目进度 | 优先：已完成任务预计耗时 / 该科全部任务预计耗时；无预计耗时时退化为任务数量比 |
+| 7 天柱状图 | 按 `StudySession` 聚合，星期标签根据真实日期动态生成 |
+
+---
+
+## 本地存储说明
+
+- **Storage Key**：`mathematics-review-v2`
+- **存储内容**：`{ tasks, studySessions }`
+- **首次访问**：使用 `mockData.ts` 中的初始数据
+- **解析失败**：自动 fallback 到初始数据，避免页面崩溃
+- **重置数据**：页脚「清空本地数据并恢复初始数据」按钮，需 `window.confirm` 二次确认
 
 ---
 
@@ -24,10 +94,10 @@
 | 技术 | 作用 |
 |------|------|
 | [React 19](https://react.dev/) | 构建用户界面 |
-| [TypeScript](https://www.typescriptlang.org/) | 类型安全，减少拼写和结构错误 |
-| [Vite](https://vite.dev/) | 开发服务器与生产构建，启动快 |
-| [Tailwind CSS v4](https://tailwindcss.com/) | 实用类样式，快速做出现代 UI |
-| [Recharts](https://recharts.org/) | 绘制近 7 天学习时长柱状图 |
+| [TypeScript](https://www.typescriptlang.org/) | 类型安全 |
+| [Vite](https://vite.dev/) | 开发服务器与生产构建 |
+| [Tailwind CSS v4](https://tailwindcss.com/) | 实用类样式 |
+| [Recharts](https://recharts.org/) | 近 7 天学习时长柱状图 |
 
 ---
 
@@ -41,13 +111,8 @@
 ### 安装与运行
 
 ```bash
-# 进入项目目录
 cd cursor_web_test
-
-# 安装依赖（首次克隆后执行一次）
 npm install
-
-# 启动开发服务器
 npm run dev
 ```
 
@@ -56,59 +121,47 @@ npm run dev
 ### 其他命令
 
 ```bash
-npm run build    # 类型检查 + 生产构建，输出到 dist/
+npm run build    # 类型检查 + 生产构建
 npm run preview  # 预览构建后的静态站点
-npm run lint     # 运行 ESLint 检查代码
+npm run lint     # ESLint 检查
 ```
 
 ---
 
-## 项目架构（给初学者的说明）
-
-本项目采用**分层结构**：数据、计算逻辑、状态、展示 UI 分开写，避免把所有代码堆在一个文件里。
+## 项目架构
 
 ```mermaid
 flowchart TB
-  subgraph view [展示层 - 只负责渲染]
-    App[App.tsx]
-    Overview[OverviewCards]
-    Subjects[SubjectProgress]
-    Chart[WeeklyChart]
-    Tasks[TaskList]
+  subgraph persist [localStorage mathematics-review-v2]
+    tasksData[tasks]
+    sessionsData[studySessions]
   end
 
-  subgraph state [状态层 - 唯一数据源]
-    Hook[useStudyProgress]
+  subgraph hook [useStudyProgress]
+    tasksData --> statsFn[utils/stats.ts]
+    sessionsData --> statsFn
+    statsFn --> derived[stats / subjectProgress / chartData]
   end
 
-  subgraph logic [逻辑层 - 纯函数计算]
-    Stats[utils/stats.ts]
+  subgraph ui [展示层]
+    SessionForm[StudySessionForm] -->|addStudySession| hook
+    TaskForm[TaskForm] -->|addTask| hook
+    TaskList[TaskList] -->|toggleTask| hook
+    derived --> Overview[OverviewCards]
+    derived --> Chart[WeeklyChart]
+    derived --> Subjects[SubjectProgress]
   end
 
-  subgraph data [数据层 - 初始 mock]
-    Mock[data/mockData.ts]
-    Types[types.ts]
-  end
-
-  Mock --> Hook
-  Types --> Hook
-  Stats --> Hook
-  Hook --> App
-  App --> Overview
-  App --> Subjects
-  App --> Chart
-  App --> Tasks
-  Tasks -->|点击切换完成| Hook
+  hook --> persist
 ```
 
-### 数据如何流动？
+### 数据流
 
-1. **初始数据**写在 `src/data/mockData.ts`（任务列表、7 天学习记录）。
-2. **`useStudyProgress` Hook** 用 `useState` 保存 `tasks` 和 `dailyStudy`，是唯一会改数据的地方。
-3. **`utils/stats.ts`** 提供纯函数：根据当前数据算出统计数字、各科进度、鼓励文案（不直接改 state）。
-4. **组件**只接收 props 并展示；用户点击任务时，调用 `toggleTask(id)`，Hook 更新 state，React 自动重新渲染整页。
-
-这就是 React 里常见的**单向数据流**：数据从上往下传，事件从下往上回调。
+1. **初始数据**在 `src/data/mockData.ts`，首次访问或重置时使用
+2. **`utils/storage.ts`** 负责 localStorage 读写与容错
+3. **`useStudyProgress` Hook** 管理 `tasks` 和 `studySessions`，是唯一修改数据的地方
+4. **`utils/stats.ts`** 提供纯函数计算统计、进度、筛选、鼓励文案
+5. **组件**通过 props 展示数据，表单/列表通过回调触发 Hook 更新
 
 ---
 
@@ -116,155 +169,81 @@ flowchart TB
 
 ```
 cursor_web_test/
-├── index.html              # 页面入口 HTML
-├── vite.config.ts          # Vite 配置（含 Tailwind 插件）
+├── index.html
+├── vite.config.ts
 ├── package.json
 ├── README.md
 └── src/
-    ├── main.tsx            # React 挂载入口
-    ├── index.css           # 全局样式 + Tailwind 引入
-    ├── App.tsx             # 页面布局与区块组合（尽量保持简洁）
-    ├── types.ts            # TypeScript 类型定义
+    ├── main.tsx
+    ├── index.css
+    ├── App.tsx
+    ├── types.ts
     ├── data/
-    │   └── mockData.ts     # 初始任务、7 天学习数据
+    │   └── mockData.ts
     ├── utils/
-    │   └── stats.ts        # 统计计算、文案、难度→分钟映射
+    │   ├── stats.ts
+    │   └── storage.ts
     ├── hooks/
-    │   └── useStudyProgress.ts   # 状态 + toggleTask 联动逻辑
+    │   └── useStudyProgress.ts
     └── components/
-        ├── OverviewCards.tsx     # 顶部 4 张概览卡
-        ├── SubjectProgress.tsx     # 三科进度
-        ├── WeeklyChart.tsx       # 柱状图
-        ├── TaskList.tsx          # 任务列表
+        ├── OverviewCards.tsx
+        ├── SubjectProgress.tsx
+        ├── WeeklyChart.tsx
+        ├── TaskList.tsx
+        ├── StudySessionForm.tsx
+        ├── TaskForm.tsx
+        ├── Filters.tsx
         └── ui/
-            ├── Card.tsx          # 通用玻璃卡片
-            ├── ProgressBar.tsx   # 进度条
-            └── Badge.tsx         # 科目标签
+            ├── Card.tsx
+            ├── ProgressBar.tsx
+            ├── Badge.tsx
+            ├── Input.tsx
+            ├── Select.tsx
+            └── Button.tsx
 ```
-
-**阅读顺序建议**（由浅入深）：
-
-1. `types.ts` — 了解有哪些数据结构  
-2. `data/mockData.ts` — 看初始数据长什么样  
-3. `utils/stats.ts` — 看数字怎么算出来  
-4. `hooks/useStudyProgress.ts` — 看点击任务后发生了什么  
-5. `App.tsx` + `components/*` — 看界面怎么拼起来  
 
 ---
 
-## 设计思路
+## 交互说明
 
-### 1. 为什么不用后端？
+### 完成任务 vs 记录学习时长
 
-考研进度看板在本阶段只需要**演示与练习**。把数据放在前端可以：
+- **完成任务**：仅更新任务的 `completed` 和 `completedAt`，影响任务统计与科目进度
+- **记录学习时长**：新增一条 `StudySession`，影响今日/本周时长、连续天数和柱状图
+- 两者相互独立，更贴近真实复习场景
 
-- 零部署成本，双击 `npm run dev` 就能跑  
-- 专注学习 React 状态与组件，不被接口、数据库分散注意力  
+### 任务筛选
 
-以后若要持久化，可把 `useStudyProgress` 里的 state 换成 `localStorage` 或对接 API，组件层几乎不用大改。
-
-### 2. 为什么用 Custom Hook？
-
-`toggleTask` 同时要改「任务完成状态」和「今日学习分钟数」。若写在 `TaskList` 里，其他组件很难共享同一份数据。
-
-把状态和更新逻辑收进 `useStudyProgress`，`App` 只负责：
-
-```tsx
-const { tasks, dailyStudy, stats, subjectProgress, toggleTask } = useStudyProgress()
-```
-
-各子组件通过 props 拿数据，职责清晰，也方便单独阅读 Hook 理解业务规则。
-
-### 3. 为什么统计放在 `utils/stats.ts`？
-
-`computeStats`、`computeSubjectProgress` 等是**纯函数**：给定输入一定得到相同输出，不依赖 React。
-
-好处：
-
-- 容易单独理解公式（如连续天数怎么数）  
-- 将来写单元测试时可直接 `import` 测试，无需渲染组件  
-
-### 4. 任务完成如何联动「今日时长」？
-
-难度与预估学习时长（分钟）的映射：
-
-| 难度 | 分钟 |
-|------|------|
-| 简单 | 30 |
-| 中等 | 45 |
-| 困难 | 60 |
-
-勾选任务 → 今日 `dailyStudy` 最后一项 `minutes` **增加**对应分钟；取消勾选则**扣回**（不低于 0）。  
-本周时长 = 7 天 `minutes` 之和，与柱状图同源，保证图表与概览一致。
-
-### 5. UI 与响应式
-
-- **Tailwind 实用类**：如 `grid-cols-1 lg:grid-cols-2`，小屏单列、大屏双列。  
-- **深色渐变 + 半透明卡片**：减少视觉疲劳，突出数据。  
-- **科目配色**：数学分析（蓝）、高等代数（紫）、英语（绿），便于一眼区分。  
-- **鼓励文案**：根据 `已完成数 / 总任务数` 在 `getEncouragement` 中返回不同句子，增强反馈感。
+- 状态：全部 / 待完成 / 已完成
+- 科目：全部科目 / 数学分析 / 高等代数 / 英语
 
 ---
 
-## 如何修改数据（练手入口）
+## 后续可扩展方向
 
-### 增删任务
-
-编辑 `src/data/mockData.ts` 中的 `initialTasks` 数组，每条任务需包含：
-
-```ts
-{
-  id: '唯一字符串',
-  name: '任务名称',
-  subject: 'math-analysis' | 'linear-algebra' | 'english',
-  difficulty: 'easy' | 'medium' | 'hard',
-  completed: false,  // 是否已完成
-}
-```
-
-### 修改 7 天学习记录
-
-同一文件中的 `initialDailyStudy` 由 `buildDailyStudy()` 生成，可改 `minutes` 数组调整各天柱高（最后一项为「今天」）。
-
-### 改难度对应时长
-
-编辑 `src/utils/stats.ts` 里的 `DIFFICULTY_MINUTES` 对象即可。
-
----
-
-## 页面结构示意
-
-```
-┌─────────────────────────────────────────────┐
-│  标题 + 鼓励文案                              │
-├──────────┬──────────┬──────────┬──────────────┤
-│ 今日学习 │ 本周学习 │ 已完成   │ 连续学习天数 │
-├──────────┴──────────┴──────────┴──────────────┤
-│  数学分析 │ 高等代数 │ 英语  （进度条）        │
-├────────────────────┬────────────────────────┤
-│  近 7 天柱状图      │  任务列表（可勾选）      │
-└────────────────────┴────────────────────────┘
-```
+- 导出 CSV（任务与学习记录）
+- 周计划与每日目标设置
+- 日历视图展示学习热力图
+- 学习目标与达成率提醒
+- 多设备同步（对接后端 API）
 
 ---
 
 ## 常见问题
 
 **Q: 刷新页面后数据会丢失吗？**  
-A: 会。当前数据只在内存中，刷新会恢复为 `mockData.ts` 的初始值。若要保存，可自行用 `localStorage` 在 Hook 里读写。
+A: 不会。数据保存在 `localStorage`（key: `mathematics-review-v2`），刷新后自动恢复。
 
-**Q: 构建时提示 chunk 较大？**  
-A: Recharts 体积较大，属正常现象。学习阶段可忽略；上线时可考虑按需加载图表库。
+**Q: 如何恢复初始演示数据？**  
+A: 点击页脚「清空本地数据并恢复初始数据」，确认即可。
 
-**Q: 我不会 React，从哪里学？**  
-A: 建议先看 [React 官方教程](https://react.dev/learn)，重点理解：组件、props、state、`useState`、`useMemo`。再结合本仓库从 `App.tsx` 和 `useStudyProgress.ts` 对照阅读。
+**Q: 完成任务会增加学习时长吗？**  
+A: 不会。v2 中任务完成与学习记录是完全独立的两套数据。
 
 ---
 
 ## 许可证
 
 本项目为学习与演示用途，可自由修改与扩展。
-
----
 
 **祝复习顺利，坚持每一天。**

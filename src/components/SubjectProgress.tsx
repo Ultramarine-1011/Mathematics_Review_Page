@@ -17,7 +17,17 @@ export function SubjectProgress({ subjects }: SubjectProgressProps) {
           </div>
           <ProgressBar percent={s.percent} colorClass={s.color} />
           <p className="mt-3 text-sm text-slate-400">
-            已完成 {s.completed}/{s.total} · 剩余 {s.remaining} 项任务
+            {s.total === 0 ? (
+              '暂无任务'
+            ) : s.progressMode === 'minutes' ? (
+              <>
+                已完成 {s.completedMinutes}/{s.totalMinutes} 分钟 · 剩余 {s.remaining} 项任务
+              </>
+            ) : (
+              <>
+                已完成 {s.completed}/{s.total} · 剩余 {s.remaining} 项任务
+              </>
+            )}
           </p>
         </Card>
       ))}
