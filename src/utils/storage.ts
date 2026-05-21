@@ -1,82 +1,68 @@
 import { getInitialState } from '../data/mockData'
-import type { PersistedState, StudySession, Subject, Task } from '../types'
+import type { PersistedState } from '../types'
+import { CURRENT_DATA_VERSION, DEFAULT_GOAL } from './defaults'
+import { isStudyGoal, isStudySession, isTask } from './validation'
 
 export const STORAGE_KEY = 'mathematics-review-v2'
 
-const VALID_SUBJECTS: Subject[] = ['math-analysis', 'linear-algebra', 'english']
-
-function isSubject(value: unknown): value is Subject {
-  return typeof value === 'string' && VALID_SUBJECTS.includes(value as Subject)
+export interface LoadStateResult {
+  state: PersistedState
+  error?: string
 }
 
-function isTask(value: unknown): value is Task {
-  if (!value || typeof value !== 'object') return false
-  const t = value as Record<string, unknown>
-  return (
-    typeof t.id === 'string' &&
-    typeof t.name === 'string' &&
-    isSubject(t.subject) &&
-    (t.difficulty === 'easy' || t.difficulty === 'medium' || t.difficulty === 'hard') &&
-    typeof t.estimatedMinutes === 'number' &&
-    typeof t.completed === 'boolean' &&
-    (t.priority === 'low' || t.priority === 'medium' || t.priority === 'high') &&
-    typeof t.createdAt === 'string' &&
-    (t.completedAt === null || typeof t.completedAt === 'string') &&
-    (t.dueDate === undefined || typeof t.dueDate === 'string')
-  )
-}
-
-function isStudySession(value: unknown): value is StudySession {
-  if (!value || typeof value !== 'object') return false
-  const s = value as Record<string, unknown>
-  return (
-    typeof s.id === 'string' &&
-    isSubject(s.subject) &&
-    typeof s.minutes === 'number' &&
-    typeof s.date === 'string' &&
-    (s.note === undefined || typeof s.note === 'string')
-  )
-}
-
-function isPersistedState(value: unknown): value is PersistedState {
-  if (!value || typeof value !== 'object') return false
+function normalizePersistedState(value: unknown): PersistedState | null {
+  if (!value || typeof value !== 'object') return null
   const state = value as Record<string, unknown>
-  return (
-    Array.isArray(state.tasks) &&
-    state.tasks.every(isTask) &&
-    Array.isArray(state.studySessions) &&
-    state.studySessions.every(isStudySession)
-  )
+  const tasks = state.tasks
+  const studySessions = state.studySessions
+  const goal = state.goal
+
+  if (!Array.isArray(tasks) || !tasks.every(isTask)) return null
+  if (!Array.isArray(studySessions) || !studySessions.every(isStudySession)) return null
+
+  return {
+    tasks,
+    studySessions,
+    goal: isStudyGoal(goal) ? goal : DEFAULT_GOAL,
+    version: CURRENT_DATA_VERSION,
+  }
 }
 
-export function loadState(): PersistedState {
+export function loadState(): LoadStateResult {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return getInitialState()
+    if (!raw) return { state: getInitialState() }
 
     const parsed: unknown = JSON.parse(raw)
-    if (isPersistedState(parsed)) return parsed
+    const normalized = normalizePersistedState(parsed)
+    if (normalized) return { state: normalized }
 
-    console.warn('Invalid stored data, falling back to initial state')
-    return getInitialState()
+    return {
+      state: getInitialState(),
+      error: '本地保存的数据结构无效，已载入初始数据。',
+    }
   } catch {
-    console.warn('Failed to parse stored data, falling back to initial state')
-    return getInitialState()
+    return {
+      state: getInitialState(),
+      error: '读取本地数据失败，已载入初始数据。',
+    }
   }
 }
 
-export function saveState(state: PersistedState): void {
+export function saveState(state: PersistedState): string | undefined {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+    return undefined
   } catch {
-    console.warn('Failed to save data to localStorage')
+    return '保存到本地存储失败，请检查浏览器存储空间或隐私设置。'
   }
 }
 
-export function clearState(): void {
+export function clearState(): string | undefined {
   try {
     localStorage.removeItem(STORAGE_KEY)
+    return undefined
   } catch {
-    console.warn('Failed to clear localStorage')
+    return '清空本地数据失败，请稍后重试。'
   }
 }

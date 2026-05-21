@@ -28,6 +28,7 @@ export function Filters({
             key={option.value}
             type="button"
             onClick={() => onStatusChange(option.value)}
+            aria-label={`筛选${option.label}任务`}
             className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
               status === option.value
                 ? 'bg-sky-500/20 text-sky-300 ring-1 ring-sky-400/40'

@@ -1,13 +1,14 @@
 import type { PersistedState, StudySession, Subject, Task } from '../types'
+import { addDays, toDateString } from '../utils/date'
+import { CURRENT_DATA_VERSION, DEFAULT_GOAL } from '../utils/defaults'
 
 const now = new Date()
 const daysAgo = (n: number) => {
-  const d = new Date(now)
-  d.setDate(d.getDate() - n)
+  const d = addDays(now, -n)
   return d.toISOString()
 }
 
-const dateStr = (n: number) => daysAgo(n).slice(0, 10)
+const dateStr = (n: number) => toDateString(addDays(now, -n))
 
 export const initialTasks: Task[] = [
   {
@@ -112,9 +113,7 @@ function buildStudySessions(): StudySession[] {
   let id = 1
 
   dailyMinutes.forEach((totalMinutes, dayOffset) => {
-    const d = new Date(today)
-    d.setDate(today.getDate() - (6 - dayOffset))
-    const date = d.toISOString().slice(0, 10)
+    const date = toDateString(addDays(today, -(6 - dayOffset)))
 
     if (totalMinutes === 0) return
 
@@ -144,5 +143,7 @@ export function getInitialState(): PersistedState {
   return {
     tasks: initialTasks,
     studySessions: initialStudySessions,
+    goal: DEFAULT_GOAL,
+    version: CURRENT_DATA_VERSION,
   }
 }

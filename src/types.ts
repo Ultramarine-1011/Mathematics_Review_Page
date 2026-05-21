@@ -27,6 +27,12 @@ export interface StudySession {
   note?: string
 }
 
+export interface StudyGoal {
+  dailyMinutesTarget: number
+  weeklyMinutesTarget: number
+  examDate?: string
+}
+
 export interface DailyStudy {
   date: string
   label: string
@@ -54,9 +60,20 @@ export interface StudyStats {
   streakDays: number
 }
 
+export interface GoalProgress {
+  dailyPercent: number
+  weeklyPercent: number
+  dailyRemaining: number
+  weeklyRemaining: number
+  dailyAchieved: boolean
+  weeklyAchieved: boolean
+}
+
 export interface PersistedState {
   tasks: Task[]
   studySessions: StudySession[]
+  goal: StudyGoal
+  version: number
 }
 
 export interface NewStudySessionInput {

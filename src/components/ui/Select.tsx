@@ -8,16 +8,24 @@ interface SelectOption {
 interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   label: string
   options: SelectOption[]
+  error?: string
 }
 
-export function Select({ label, id, options, className = '', ...props }: SelectProps) {
+export function Select({ label, id, options, className = '', error, ...props }: SelectProps) {
   const selectId = id ?? label
+  const errorId = `${selectId}-error`
   return (
     <label htmlFor={selectId} className="block space-y-1.5">
       <span className="text-sm text-slate-400">{label}</span>
       <select
         id={selectId}
-        className={`w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white transition-colors focus:border-sky-400/50 focus:outline-none ${className}`}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? errorId : undefined}
+        className={`w-full rounded-xl border bg-white/5 px-3 py-2 text-white transition-colors focus:outline-none ${
+          error
+            ? 'border-rose-400/70 focus:border-rose-300'
+            : 'border-white/10 focus:border-sky-400/50'
+        } ${className}`}
         {...props}
       >
         {options.map((option) => (
@@ -26,6 +34,11 @@ export function Select({ label, id, options, className = '', ...props }: SelectP
           </option>
         ))}
       </select>
+      {error && (
+        <span id={errorId} className="block text-sm text-rose-300">
+          {error}
+        </span>
+      )}
     </label>
   )
 }

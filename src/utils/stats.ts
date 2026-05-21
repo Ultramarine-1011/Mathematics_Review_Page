@@ -1,7 +1,9 @@
 import type {
   DailyStudy,
   Difficulty,
+  GoalProgress,
   Priority,
+  StudyGoal,
   StudySession,
   StudyStats,
   Subject,
@@ -9,6 +11,13 @@ import type {
   Task,
   TaskFilterStatus,
 } from '../types'
+import {
+  daysUntilDate,
+  formatDateTimeLocal,
+  getLastNDates,
+  parseDateString,
+  toDateString,
+} from './date'
 
 export const SUBJECT_LABELS: Record<Subject, string> = {
   'math-analysis': '数学分析',
@@ -44,16 +53,11 @@ const ALL_SUBJECTS: Subject[] = ['math-analysis', 'linear-algebra', 'english']
 
 const WEEKDAY_LABELS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
 
-export function toDateString(date: Date): string {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
-}
+export { toDateString }
 
 export function getWeekdayLabel(dateStr: string): string {
-  const [y, m, d] = dateStr.split('-').map(Number)
-  const date = new Date(y, m - 1, d)
+  const date = parseDateString(dateStr)
+  if (!date) return dateStr
   return WEEKDAY_LABELS[date.getDay()]
 }
 
@@ -66,30 +70,14 @@ export function formatDuration(totalMinutes: number): string {
 }
 
 export function formatDateTime(iso: string): string {
-  const date = new Date(iso)
-  const datePart = toDateString(date)
-  const timePart = date.toLocaleTimeString('zh-CN', {
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-  return `${datePart} ${timePart}`
-}
-
-function getLast7DayDates(refDate: Date): string[] {
-  const dates: string[] = []
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(refDate)
-    d.setDate(refDate.getDate() - i)
-    dates.push(toDateString(d))
-  }
-  return dates
+  return formatDateTimeLocal(iso)
 }
 
 export function aggregateDailyStudy(
   sessions: StudySession[],
   refDate: Date = new Date(),
 ): DailyStudy[] {
-  const dates = getLast7DayDates(refDate)
+  const dates = getLastNDates(7, refDate)
   const minutesByDate = new Map<string, number>()
 
   for (const date of dates) {
@@ -124,7 +112,7 @@ export function computeWeekMinutes(
   sessions: StudySession[],
   refDate: Date = new Date(),
 ): number {
-  const dates = new Set(getLast7DayDates(refDate))
+  const dates = new Set(getLastNDates(7, refDate))
   return sessions
     .filter((s) => dates.has(s.date))
     .reduce((sum, s) => sum + s.minutes, 0)
@@ -203,6 +191,27 @@ export function computeStats(
   }
 }
 
+export function computeGoalProgress(
+  todayMinutes: number,
+  weekMinutes: number,
+  goal: StudyGoal,
+): GoalProgress {
+  const dailyTarget = Math.max(goal.dailyMinutesTarget, 1)
+  const weeklyTarget = Math.max(goal.weeklyMinutesTarget, 1)
+  return {
+    dailyPercent: Math.round((todayMinutes / dailyTarget) * 100),
+    weeklyPercent: Math.round((weekMinutes / weeklyTarget) * 100),
+    dailyRemaining: Math.max(dailyTarget - todayMinutes, 0),
+    weeklyRemaining: Math.max(weeklyTarget - weekMinutes, 0),
+    dailyAchieved: todayMinutes >= dailyTarget,
+    weeklyAchieved: weekMinutes >= weeklyTarget,
+  }
+}
+
+export function daysUntilExam(examDate: string | undefined, refDate: Date = new Date()): number | null {
+  return daysUntilDate(examDate, refDate)
+}
+
 export function isOverdue(dueDate: string | undefined, completed: boolean): boolean {
   if (!dueDate || completed) return false
   const today = toDateString(new Date())
@@ -224,11 +233,32 @@ export function filterTasks(
 
 export function getEncouragement(
   stats: StudyStats,
-  todayMinutes: number,
+  goalProgress?: GoalProgress,
+  examDays?: number | null,
 ): string {
   const { completedTasks, totalTasks } = stats
+  const todayMinutes = stats.todayMinutes
   const taskRatio = totalTasks === 0 ? 0 : completedTasks / totalTasks
 
+  if (examDays !== null && examDays !== undefined && examDays >= 0 && examDays < 30) {
+    if (goalProgress?.dailyAchieved) {
+      return `距离考试还有 ${examDays} 天，今天目标已达成，冲刺期就这样稳住节奏。`
+    }
+    if (todayMinutes > 0) {
+      return `距离考试还有 ${examDays} 天，今天已经开始推进，继续补上关键一段。`
+    }
+    return `距离考试还有 ${examDays} 天，先安排一段可完成的复习，稳稳进入状态。`
+  }
+
+  if (goalProgress?.dailyAchieved && goalProgress.weeklyAchieved) {
+    return '今日和本周目标都在轨道上，保持这个节奏很漂亮。'
+  }
+  if (goalProgress?.dailyAchieved) {
+    return '今日学习目标已达成，可以复盘一下最有收获的部分。'
+  }
+  if (todayMinutes > 0 && goalProgress && !goalProgress.dailyAchieved) {
+    return `今天已经记录学习，再推进 ${goalProgress.dailyRemaining} 分钟就能达成目标。`
+  }
   if (todayMinutes >= 120 && taskRatio === 1 && totalTasks > 0) {
     return '今日学习充实，任务也全部完成，太棒了！'
   }
